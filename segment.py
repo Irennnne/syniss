@@ -11,6 +11,42 @@ import numpy as np
 # End of your import statements.
 # ===========================================================
 
+def convert_label2rgb(img_label, label_colors):
+    """Convert label image to a 3-channel RGB image.
+
+    Create a 3-channel RGB image filled with the specified colors in the corresponding pixels of the label image.
+    Parameters:
+    -----------
+    img_label: numpy.ndarray (m,n)
+        The label array that identified each pixel with its corresponding class label.
+    label_colors: dict
+        The mapping between class labels and the RGB colors that the resulting image would assign for each class
+        label. The keys are integers specifying class labels that are present in img_label. They values are lists
+        of RGB triplets in uint8 type (e.g., [240, 224, 200]).
+    Returns:
+    --------
+    img_rgb: numpy.ndarray (m,n,3)
+        The RGB image wherein pixels corresponding to the label image have been assigned their respective colors.
+    """
+    # check how many unique labels are present and if there are corresponding colors specified
+    label_ids = np.unique(img_label)
+    if len(label_ids) > len(label_colors.keys()):
+        raise KeyError(
+            f"There are more unique labels ({len(label_ids)}) present in label image then provided label colors ({len(label_colors.keys())})."
+        )
+    # check that each label has a corresponding color
+    for id in label_ids:
+        if id not in label_colors.keys():
+            raise KeyError(f"There is no color specified for the label {id}.")
+    # generate the RGB image
+    img_rgb = np.zeros(img_label.shape + (3,), dtype=np.uint8)
+    for id in label_ids:
+        rr, cc = np.where(img_label == id)
+        img_rgb[rr, cc, :] = label_colors[id]
+    return img_rgb
+
+
+
 def segment(input_image_path, output_mask_path):
     """
     Segment the provided image and save the result in an image file.
@@ -44,20 +80,23 @@ def segment(input_image_path, output_mask_path):
     # dummy predictions - creating predictions using the groundtruth images 
     # please delete this code 
     # ensure that the `pred_labels` variable is populated as per instructions above. 
-    gt_rgb = imread(input_image_path.replace("s-", "p-"))
-    pred_labels = np.zeros((gt_rgb.shape[0], gt_rgb.shape[1]), dtype=np.uint8)
-    class_colors = {
-        1: [255, 214, 0],
-        2: [138, 0, 0],
-        3: [49, 205, 49]
-    }
-    for k, v in class_colors.items():
-        roi = (
-            (gt_rgb[:,:,0] == v[0]) &
-            (gt_rgb[:,:,1] == v[1]) & 
-            (gt_rgb[:,:,2] == v[2])
-        )
-        pred_labels[roi] = k
+    # gt_rgb = imread(input_image_path.replace("s-", "p-"))
+    # pred_labels = np.zeros((gt_rgb.shape[0], gt_rgb.shape[1]), dtype=np.uint8)
+    # class_colors = {
+    #     1: [255, 214, 0],
+    #     2: [138, 0, 0],
+    #     3: [49, 205, 49]
+    # }
+    # for k, v in class_colors.items():
+    #     roi = (
+    #         (gt_rgb[:,:,0] == v[0]) &
+    #         (gt_rgb[:,:,1] == v[1]) & 
+    #         (gt_rgb[:,:,2] == v[2])
+    #     )
+    #     pred_labels[roi] = k
+
+    # print("pred_labels_input", pred_labels.shape)
+
 
 
     # config = "segnext_mscan-t_1xb16-adamw-40k_syniss_binary-512x512.py"
@@ -68,6 +107,11 @@ def segment(input_image_path, output_mask_path):
     # print("result.pred_sem_seg======",result.pred_sem_seg)
     pred_labels_bef = result.pred_sem_seg.cpu().data.numpy()
     pred_labels = np.where(pred_labels_bef==1,3,np.where(pred_labels_bef==3,1,pred_labels_bef))
+    # print("pred_labels_output", pred_labels.shape)
+
+    pred_labels = np.squeeze(pred_labels)
+    # print("pred_labels_after squeeze", pred_labels.shape)
+
     
 
 
@@ -77,6 +121,13 @@ def segment(input_image_path, output_mask_path):
     # ================================================
 
     # convert the numpy array to RGB image and save it to file
-    imsave(output_mask_path, (label2rgb(pred_labels, colors=["gold", "darkred", "limegreen"]) * 255.0).astype(np.uint8))
-    
+    imsave(output_mask_path, convert_label2rgb(pred_labels, label_colors={
+            0: [0, 0, 0],       # black
+            1: [255, 214, 0],   # gold
+            2: [138, 0, 0],     # darkred
+            3: [49, 205, 49]    # limegreen
+        }))
     return
+
+if __name__ == "__main__":
+    segment("syn_iss/submission/syn-iss_2023/docker/templates/task2-parts/sample-test-data/inputs/p-017b418851a5bb01edd7.png", "/mnt/data-hdd/jieming/syn_iss/submission/syn-iss_2023/docker/templates/task2-parts/sample-test-data/outputs/test.png")
